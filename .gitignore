@@ -1,3 +1,4 @@
+```
 # Python
 __pycache__/
 *.pyc
@@ -21,3 +22,8 @@ instagram_poster.log
 # Temporary files
 *.tmp
 *.temp
+
+# macOS
+.DS_Store
+
+```

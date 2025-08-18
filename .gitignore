@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+
+# Sensitive files
+.env
+secrets.txt
+
+# Media folders
+photodump/
+posted_media/
+
+# Logs
+instagram_poster.log
+
+# Temporary files
+*.tmp
+*.temp

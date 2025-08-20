@@ -7,25 +7,41 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from PIL import Image
+import ffmpeg
 
 # Define paths
 PHOTODUMP_PATH = "photodump"
 POSTED_MEDIA_PATH = "posted_media"
 
 def get_photo_creation_date(local_path):
-    """Extract creation date from photo EXIF or fallback to file creation time."""
-    try:
-        with Image.open(local_path) as img:
-            exif_data = img.getexif()
-            if exif_data:
-                # EXIF tag 36867: DateTimeOriginal
-                date_str = exif_data.get(36867)
-                if date_str:
-                    return datetime.strptime(date_str, '%Y:%m:%d %H:%M:%S').replace(tzinfo=ZoneInfo("America/Chicago"))
-    except Exception as e:
-        logging.warning(f"Failed to extract EXIF date for {local_path}: {e}")
+    """Extract creation date from photo EXIF, video metadata, or fallback to file creation time."""
+    file_ext = os.path.splitext(local_path)[1].lower()
     
-    # Fallback to file creation time (st_birthtime for macOS)
+    # Handle images (.jpg, .jpeg, .png)
+    if file_ext in ('.jpg', '.jpeg', '.png'):
+        try:
+            with Image.open(local_path) as img:
+                exif_data = img.getexif()
+                if exif_data:
+                    # EXIF tag 36867: DateTimeOriginal
+                    date_str = exif_data.get(36867)
+                    if date_str:
+                        return datetime.strptime(date_str, '%Y:%m:%d %H:%M:%S').replace(tzinfo=ZoneInfo("America/Chicago"))
+        except Exception as e:
+            logging.warning(f"Failed to extract EXIF date for {local_path}: {e}")
+    
+    # Handle videos (.mp4, .mov)
+    elif file_ext in ('.mp4', '.mov'):
+        try:
+            probe = ffmpeg.probe(local_path)
+            creation_time = probe['format'].get('tags', {}).get('creation_time')
+            if creation_time:
+                # Parse ISO 8601 format (e.g., '2023-01-01T12:00:00.000000Z')
+                return datetime.strptime(creation_time, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/Chicago"))
+        except Exception as e:
+            logging.warning(f"Failed to extract video metadata for {local_path}: {e}")
+    
+    # Fallback to file creation time
     try:
         stats = os.stat(local_path)
         creation_time = stats.st_birthtime

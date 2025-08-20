@@ -8,7 +8,6 @@ import time
 from .media_handler import get_oldest_media, move_to_posted_folder
 from .instagram_client import get_instagram_client, post_media
 
-
 def run(count: int, dry_run: bool = False, delay: int = 0) -> None:
     """
     Post the oldest photos to Instagram and move them to the posted folder.
@@ -18,15 +17,6 @@ def run(count: int, dry_run: bool = False, delay: int = 0) -> None:
         dry_run (bool): If True, simulate posting without sending to Instagram.
         delay (int): Seconds to wait between posts.
     """
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler("instagram_poster.log"),
-            logging.StreamHandler()
-        ]
-    )
-
     logging.info(f"Starting poster run | count={count} dry_run={dry_run} delay={delay}")
 
     try:
@@ -59,8 +49,8 @@ def run(count: int, dry_run: bool = False, delay: int = 0) -> None:
             if dry_run:
                 logging.info(f"[DRY RUN] Would move {filename} to posted folder")
             else:
-              move_to_posted_folder(filename)
-              logging.info(f"Moved {filename} to posted folder")
+                move_to_posted_folder(filename)
+                logging.info(f"Moved {filename} to posted folder")
 
             posted_count += 1
 

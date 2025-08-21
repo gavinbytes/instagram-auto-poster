@@ -13,85 +13,45 @@ import ffmpeg
 PHOTODUMP_PATH = "photodump"
 POSTED_MEDIA_PATH = "posted_media"
 
-def get_photo_creation_date(local_path):
-    """Extract creation date from photo EXIF, video metadata, or fallback to file creation time."""
-    file_ext = os.path.splitext(local_path)[1].lower()
-    
-    # Handle images (.jpg, .jpeg, .png)
-    if file_ext in ('.jpg', '.jpeg', '.png'):
-        try:
-            with Image.open(local_path) as img:
-                exif_data = img.getexif()
-                if exif_data:
-                    # EXIF tag 36867: DateTimeOriginal
-                    date_str = exif_data.get(36867)
-                    if date_str:
-                        return datetime.strptime(date_str, '%Y:%m:%d %H:%M:%S').replace(tzinfo=ZoneInfo("America/Chicago"))
-        except Exception as e:
-            logging.warning(f"Failed to extract EXIF date for {local_path}: {e}")
-    
-    # Handle videos (.mp4, .mov)
-    elif file_ext in ('.mp4', '.mov'):
-        try:
-            probe = ffmpeg.probe(local_path)
-            creation_time = probe['format'].get('tags', {}).get('creation_time')
-            if creation_time:
-                # Parse ISO 8601 format (e.g., '2023-01-01T12:00:00.000000Z')
-                return datetime.strptime(creation_time, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/Chicago"))
-        except Exception as e:
-            logging.warning(f"Failed to extract video metadata for {local_path}: {e}")
-    
-    # Fallback to file creation time
-    try:
-        stats = os.stat(local_path)
-        creation_time = stats.st_birthtime
-        return datetime.fromtimestamp(creation_time, tz=ZoneInfo("America/Chicago"))
-    except AttributeError:
-        logging.warning(f"st_birthtime not available for {local_path}, using current time")
-        return datetime.now(tz=ZoneInfo("America/Chicago"))
-    except Exception as e:
-        logging.error(f"Failed to get file creation time for {local_path}: {e}")
-        return datetime.now(tz=ZoneInfo("America/Chicago"))
+import os
+import logging
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+PHOTODUMP_PATH = "photodump"
 
 def get_oldest_media():
     """
     Return the path, filename, and creation date of the oldest media file in photodump/.
-    
-    Returns:
-        tuple: (file_path, filename, creation_date) or (None, None, None) if no valid files.
+    Returns (file_path, filename, creation_date) or (None, None, None) if none found.
     """
     folder = Path(PHOTODUMP_PATH)
-    
-    # Check if folder exists
-    if not folder.exists():
-        logging.error(f"Directory {PHOTODUMP_PATH} does not exist")
-        return None, None, None
     if not folder.is_dir():
-        logging.error(f"'{PHOTODUMP_PATH}' is not a directory")
+        logging.error(f"{PHOTODUMP_PATH} is not a valid directory")
         return None, None, None
-    
-    valid_extensions = {'.jpeg', '.jpg', '.mov', '.mp4', '.png'}
+
+    valid_exts = {".jpeg", ".jpg", ".png", ".mov", ".mp4"}
     file_data = []
-    
-    # Iterate through all files in the folder
+
     for file_path in folder.iterdir():
-        if file_path.is_file() and file_path.suffix.lower() in valid_extensions:
+        if file_path.is_file() and file_path.suffix.lower() in valid_exts:
             try:
-                filename = file_path.name
-                creation_date = get_photo_creation_date(file_path)
-                file_data.append((str(file_path), filename, creation_date))
+                # Try file creation time (st_birthtime), fallback to modified time
+                stats = os.stat(file_path)
+                creation_time = getattr(stats, "st_birthtime", stats.st_mtime)
+                creation_date = datetime.fromtimestamp(creation_time, tz=ZoneInfo("America/Los_Angeles"))
+                file_data.append((str(file_path), file_path.name, creation_date))
             except Exception as e:
-                logging.warning(f"Skipping {file_path} due to error: {e}")
-                continue
-    
+                logging.warning(f"Skipping {file_path}: {e}")
+
     if not file_data:
         logging.info(f"No valid media files found in {PHOTODUMP_PATH}")
         return None, None, None
-    
-    # Get the oldest file
-    oldest_file = min(file_data, key=lambda x: x[2])
-    logging.info(f"Oldest file found: {oldest_file[1]} (Created: {oldest_file[2].strftime('%Y-%m-%d %H:%M:%S %Z')})")
-    return oldest_file[0], oldest_file[1], oldest_file[2]
+
+    oldest = min(file_data, key=lambda x: x[2])
+    logging.info(f"Oldest file: {oldest[1]} (Created: {oldest[2]})")
+    return oldest
 
 def move_to_posted_folder(filename):
     """Move the file from photodump/ to posted_media/ with timestamp prefix."""
